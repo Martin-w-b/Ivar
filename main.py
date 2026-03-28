@@ -1,5 +1,7 @@
 from camera import IvarCamera, CAMERA_AVAILABLE
 from brain import IvarBrain
+from stream import start_stream_server
+from config import STREAM_PORT
 from utils import setup_logging, save_frame, print_banner
 
 
@@ -24,6 +26,15 @@ def main():
             print(f"  Camera: unavailable ({e})")
     else:
         print("  Camera: not available (not on Raspberry Pi?)")
+
+    # Start live stream server
+    stream_server = None
+    if camera:
+        try:
+            stream_server = start_stream_server(camera.picam2)
+            print(f"  Stream: http://ivar.local:{STREAM_PORT}")
+        except Exception as e:
+            print(f"  Stream: failed ({e})")
 
     print(f"  Brain:  {brain.model}")
     print()
@@ -86,6 +97,8 @@ def main():
     except KeyboardInterrupt:
         print("\nGoodbye!")
     finally:
+        if stream_server:
+            stream_server.shutdown()
         if camera:
             camera.close()
 

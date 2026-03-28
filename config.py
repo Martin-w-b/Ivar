@@ -15,6 +15,8 @@ JPEG_QUALITY = 85
 
 CAPTURE_DIR = "captures"
 
+STREAM_PORT = int(os.getenv("STREAM_PORT", "8080"))
+
 MAX_HISTORY_TURNS = 10
 
 SYSTEM_PROMPT = (
