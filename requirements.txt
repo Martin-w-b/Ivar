@@ -1,0 +1,5 @@
+anthropic>=0.40.0
+picamera2>=0.3.12
+numpy
+Pillow
+python-dotenv
