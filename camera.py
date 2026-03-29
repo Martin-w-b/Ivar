@@ -2,7 +2,8 @@ import io
 import base64
 import logging
 
-from PIL import ImageDraw, ImageFont
+import numpy as np
+from PIL import ImageDraw
 from config import CAMERA_RESOLUTION, JPEG_QUALITY
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ except ImportError:
     logger.warning("picamera2 not available — camera features disabled")
 
 try:
-    from picamera2.devices.imx500 import IMX500
+    from picamera2.devices.imx500 import IMX500, NetworkIntrinsics
     IMX500_AVAILABLE = True
 except ImportError:
     logger.warning("IMX500 module not available — object detection disabled")
@@ -54,12 +55,16 @@ class IvarCamera:
             )
 
         self.imx500 = None
+        self.intrinsics = None
         self.detection_enabled = False
 
         # Load object detection model if available
         if IMX500_AVAILABLE:
             try:
                 self.imx500 = IMX500(DETECTION_MODEL)
+                self.intrinsics = self.imx500.network_intrinsics
+                if not self.intrinsics:
+                    self.intrinsics = NetworkIntrinsics()
                 self.detection_enabled = True
                 logger.info("Object detection model loaded")
             except Exception as e:
@@ -78,32 +83,52 @@ class IvarCamera:
         """Capture a single frame and return as a PIL Image."""
         return self.picam2.capture_image("main")
 
-    def detect_objects(self):
+    def detect_objects(self, metadata=None):
         """Run object detection and return list of detected objects."""
         if not self.detection_enabled:
             return []
 
-        metadata = self.picam2.capture_metadata()
+        if metadata is None:
+            metadata = self.picam2.capture_metadata()
+
         try:
-            outputs = self.imx500.get_outputs(metadata, add_batch=True)
+            np_outputs = self.imx500.get_outputs(metadata, add_batch=True)
         except Exception:
             return []
 
-        if outputs is None:
+        if np_outputs is None:
             return []
 
-        detections = []
-        boxes, scores, classes = outputs[0][0], outputs[1][0], outputs[2][0]
+        input_w, input_h = self.imx500.get_input_size()
+        boxes, scores, classes = np_outputs[0][0], np_outputs[1][0], np_outputs[2][0]
 
+        # Normalize boxes if needed
+        bbox_normalization = getattr(self.intrinsics, 'bbox_normalization', False)
+        bbox_order = getattr(self.intrinsics, 'bbox_order', '')
+
+        if bbox_normalization:
+            boxes = boxes / input_h
+
+        if bbox_order == "xy":
+            boxes = boxes[:, [1, 0, 3, 2]]
+
+        detections = []
         for i in range(len(scores)):
             if scores[i] < DETECTION_THRESHOLD:
                 continue
             class_idx = int(classes[i])
             label = COCO_LABELS[class_idx] if class_idx < len(COCO_LABELS) else f"class_{class_idx}"
+
+            # Convert from inference coords to image coords
+            box = boxes[i]
+            coords = self.imx500.convert_inference_coords(
+                tuple(box), metadata, self.picam2
+            )
+
             detections.append({
                 "label": label,
                 "confidence": float(scores[i]),
-                "bbox": boxes[i].tolist(),
+                "bbox": coords,  # (x, y, w, h) in image space
             })
 
         logger.info("Detected %d objects", len(detections))
@@ -120,12 +145,13 @@ class IvarCamera:
         if detections:
             draw = ImageDraw.Draw(frame)
             for det in detections:
-                bbox = det["bbox"]
+                x, y, w, h = det["bbox"]
                 label = f"{det['label']} {det['confidence']:.0%}"
-                # Draw bounding box
-                x, y, w, h = bbox
                 draw.rectangle([x, y, x + w, y + h], outline="lime", width=3)
-                draw.text((x, y - 15), label, fill="lime")
+                # Draw label background
+                text_bbox = draw.textbbox((x, y - 15), label)
+                draw.rectangle(text_bbox, fill="lime")
+                draw.text((x, y - 15), label, fill="black")
 
         return frame, detections
 
