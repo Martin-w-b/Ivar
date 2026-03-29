@@ -54,6 +54,8 @@ def main():
             print(f"  Voice: disabled ({e})")
         except ImportError as e:
             print(f"  Voice: missing dependencies ({e})")
+        except Exception as e:
+            print(f"  Voice: unavailable ({e})")
 
     print(f"  Brain:  {brain.model}")
     print()
