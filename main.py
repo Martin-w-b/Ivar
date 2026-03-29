@@ -1,6 +1,6 @@
 from camera import IvarCamera, CAMERA_AVAILABLE
 from brain import IvarBrain
-from stream import start_stream_server, update_transcript
+from stream import start_stream_server, update_transcript, update_status
 from config import STREAM_PORT, VOICE_MODE, SYSTEM_PROMPT_CAMERA, SYSTEM_PROMPT_NO_CAMERA
 from utils import setup_logging, save_frame, print_banner
 
@@ -102,7 +102,7 @@ def _voice_loop(brain, camera, voice):
     print("Voice mode active. Speak to Ivar! (Ctrl+C to restart)\n")
     while True:
         print("[Listening...]")
-        update_transcript("status", "Listening...")
+        update_status("Listening...")
         user_input = voice.listen()
 
         if not user_input:
@@ -111,7 +111,7 @@ def _voice_loop(brain, camera, voice):
 
         print(f"You> {user_input}")
         update_transcript("user", user_input)
-        update_transcript("status", f"You: {user_input}")
+        update_status(f"You: {user_input}")
 
         command = user_input.lower().strip().rstrip(".")
 
@@ -136,7 +136,7 @@ def _voice_loop(brain, camera, voice):
                 response = brain.think(user_input)
             print(f"Ivar> {response}")
             update_transcript("ivar", response)
-            update_transcript("status", f"Ivar: {response}")
+            update_status(f"Ivar: {response}")
             voice.speak(response)
 
         print()

@@ -32,6 +32,8 @@ _picam2 = None
 _transcript = deque(maxlen=50)
 _transcript_lock = Lock()
 _transcript_version = 0
+_status_text = "Starting..."
+_status_lock = Lock()
 
 
 def update_transcript(role: str, text: str):
@@ -40,6 +42,13 @@ def update_transcript(role: str, text: str):
     with _transcript_lock:
         _transcript.append({"role": role, "text": text})
         _transcript_version += 1
+
+
+def update_status(text: str):
+    """Update the status text shown on the stream page."""
+    global _status_text
+    with _status_lock:
+        _status_text = text
 
 
 class StreamHandler(BaseHTTPRequestHandler):
@@ -206,12 +215,11 @@ class StreamHandler(BaseHTTPRequestHandler):
             try {{
                 const res = await fetch('/transcript?since=' + lastVersion);
                 const data = await res.json();
+                if (data.status) {{
+                    listeningDiv.textContent = data.status;
+                }}
                 if (data.messages.length > 0) {{
                     for (const msg of data.messages) {{
-                        if (msg.role === 'status') {{
-                            listeningDiv.textContent = msg.text;
-                            continue;
-                        }}
                         const div = document.createElement('div');
                         div.className = 'msg ' + msg.role;
                         const roleLabel = msg.role === 'user' ? 'You' : msg.role === 'ivar' ? 'Ivar' : '';
@@ -286,7 +294,10 @@ class StreamHandler(BaseHTTPRequestHandler):
             else:
                 messages = []
 
-        data = {"version": current_version, "messages": messages}
+        with _status_lock:
+            status = _status_text
+
+        data = {"version": current_version, "messages": messages, "status": status}
         body = json.dumps(data).encode()
 
         self.send_response(200)
