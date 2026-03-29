@@ -1,6 +1,6 @@
 from camera import IvarCamera, CAMERA_AVAILABLE
 from brain import IvarBrain
-from stream import start_stream_server
+from stream import start_stream_server, update_transcript
 from config import STREAM_PORT, VOICE_MODE, SYSTEM_PROMPT_CAMERA, SYSTEM_PROMPT_NO_CAMERA
 from utils import setup_logging, save_frame, print_banner
 
@@ -63,10 +63,19 @@ def main():
     print(f"  Brain:  {brain.model}")
     print()
 
-    if voice:
-        _voice_loop(brain, camera, voice)
-    else:
-        _text_loop(brain, camera)
+    # Main loop — Ctrl+C restarts listening instead of quitting
+    while True:
+        try:
+            if voice:
+                _voice_loop(brain, camera, voice)
+            else:
+                _text_loop(brain, camera)
+            break  # Clean exit via quit/exit command
+        except KeyboardInterrupt:
+            print("\n[Restarting...]\n")
+            brain.reset_conversation()
+            update_transcript("system", "Conversation restarted.")
+            continue
 
     if stream_server:
         stream_server.shutdown()
@@ -96,105 +105,105 @@ def _capture_with_detections(camera):
 
 def _voice_loop(brain, camera, voice):
     """Voice conversation loop: listen -> think -> speak."""
-    print("Voice mode active. Speak to Ivar! (Ctrl+C to quit)\n")
-    try:
-        while True:
-            print("[Listening...]")
-            user_input = voice.listen()
+    print("Voice mode active. Speak to Ivar! (Ctrl+C to restart)\n")
+    while True:
+        print("[Listening...]")
+        user_input = voice.listen()
 
-            if not user_input:
-                print("[No speech detected, try again]")
-                continue
+        if not user_input:
+            print("[No speech detected, try again]")
+            continue
 
-            print(f"You> {user_input}")
+        print(f"You> {user_input}")
+        update_transcript("user", user_input)
 
-            command = user_input.lower().strip().rstrip(".")
+        command = user_input.lower().strip().rstrip(".")
 
-            if command in ("quit", "exit", "stop"):
-                print("Goodbye!")
-                voice.speak("Goodbye!")
-                break
+        if command in ("quit", "exit", "stop"):
+            print("Goodbye!")
+            voice.speak("Goodbye!")
+            update_transcript("ivar", "Goodbye!")
+            return
 
-            elif command == "reset":
-                brain.reset_conversation()
-                print("Ivar> Conversation cleared. Fresh start!")
-                voice.speak("Conversation cleared. Fresh start!")
+        elif command == "reset":
+            brain.reset_conversation()
+            print("Ivar> Conversation cleared. Fresh start!")
+            voice.speak("Conversation cleared. Fresh start!")
+            update_transcript("ivar", "Conversation cleared. Fresh start!")
 
+        else:
+            if camera:
+                image_b64, detections = _capture_with_detections(camera)
+                prompt = _build_prompt(user_input, detections)
+                response = brain.see_and_think(image_b64, prompt)
             else:
-                if camera:
-                    image_b64, detections = _capture_with_detections(camera)
-                    prompt = _build_prompt(user_input, detections)
-                    response = brain.see_and_think(image_b64, prompt)
-                else:
-                    response = brain.think(user_input)
-                print(f"Ivar> {response}")
-                voice.speak(response)
+                response = brain.think(user_input)
+            print(f"Ivar> {response}")
+            update_transcript("ivar", response)
+            voice.speak(response)
 
-            print()
-
-    except KeyboardInterrupt:
-        print("\nGoodbye!")
+        print()
 
 
 def _text_loop(brain, camera):
     """Original text REPL loop."""
-    try:
-        while True:
-            try:
-                user_input = input("You> ").strip()
-            except EOFError:
-                break
+    while True:
+        try:
+            user_input = input("You> ").strip()
+        except EOFError:
+            return
 
-            if not user_input:
+        if not user_input:
+            continue
+
+        command = user_input.lower()
+
+        if command in ("quit", "exit"):
+            print("Goodbye!")
+            return
+
+        elif command == "help":
+            print_banner(has_camera=camera is not None)
+
+        elif command == "reset":
+            brain.reset_conversation()
+            print("Ivar> Conversation cleared. Fresh start!")
+            update_transcript("ivar", "Conversation cleared. Fresh start!")
+
+        elif command == "snap":
+            if not camera:
+                print("Ivar> I can't take photos without a camera.")
                 continue
+            frame, detections = camera.capture_frame_with_detections()
+            path = save_frame(frame)
+            if detections:
+                print(f"  [Detected: {', '.join(d['label'] for d in detections)}]")
+            print(f"Ivar> Photo saved to {path}")
 
-            command = user_input.lower()
+        elif command == "look":
+            if not camera:
+                print("Ivar> I can't see without a camera.")
+                continue
+            print("[Capturing frame...]")
+            image_b64, detections = _capture_with_detections(camera)
+            prompt = _build_prompt("Describe what you see.", detections)
+            response = brain.see_and_think(image_b64, prompt)
+            print(f"Ivar> {response}")
+            update_transcript("ivar", response)
 
-            if command in ("quit", "exit"):
-                print("Goodbye!")
-                break
-
-            elif command == "help":
-                print_banner(has_camera=camera is not None)
-
-            elif command == "reset":
-                brain.reset_conversation()
-                print("Ivar> Conversation cleared. Fresh start!")
-
-            elif command == "snap":
-                if not camera:
-                    print("Ivar> I can't take photos without a camera.")
-                    continue
-                frame, detections = camera.capture_frame_with_detections()
-                path = save_frame(frame)
-                if detections:
-                    print(f"  [Detected: {', '.join(d['label'] for d in detections)}]")
-                print(f"Ivar> Photo saved to {path}")
-
-            elif command == "look":
-                if not camera:
-                    print("Ivar> I can't see without a camera.")
-                    continue
+        else:
+            update_transcript("user", user_input)
+            if camera:
                 print("[Capturing frame...]")
                 image_b64, detections = _capture_with_detections(camera)
-                prompt = _build_prompt("Describe what you see.", detections)
+                prompt = _build_prompt(user_input, detections)
                 response = brain.see_and_think(image_b64, prompt)
-                print(f"Ivar> {response}")
-
             else:
-                if camera:
-                    print("[Capturing frame...]")
-                    image_b64, detections = _capture_with_detections(camera)
-                    prompt = _build_prompt(user_input, detections)
-                    response = brain.see_and_think(image_b64, prompt)
-                else:
-                    response = brain.think(user_input)
-                print(f"Ivar> {response}")
+                response = brain.think(user_input)
+            print(f"Ivar> {response}")
+            update_transcript("ivar", response)
 
-            print()
-
-    except KeyboardInterrupt:
-        print("\nGoodbye!")
+        print()
 
 
 if __name__ == "__main__":
