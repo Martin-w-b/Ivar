@@ -63,19 +63,13 @@ def main():
     print(f"  Brain:  {brain.model}")
     print()
 
-    # Main loop — Ctrl+C restarts listening instead of quitting
-    while True:
-        try:
-            if voice:
-                _voice_loop(brain, camera, voice)
-            else:
-                _text_loop(brain, camera)
-            break  # Clean exit via quit/exit command
-        except KeyboardInterrupt:
-            print("\n[Restarting...]\n")
-            brain.reset_conversation()
-            update_transcript("system", "Conversation restarted.")
-            continue
+    try:
+        if voice:
+            _voice_loop(brain, camera, voice)
+        else:
+            _text_loop(brain, camera)
+    except KeyboardInterrupt:
+        print("\nGoodbye!")
 
     if stream_server:
         stream_server.shutdown()
