@@ -116,8 +116,8 @@ def _voice_loop(brain, camera, voice):
             continue
 
         print(f"You> {user_input}")
-        update_transcript("status", "Thinking...")
         update_transcript("user", user_input)
+        update_transcript("status", f"You: {user_input}")
 
         command = user_input.lower().strip().rstrip(".")
 
@@ -142,7 +142,7 @@ def _voice_loop(brain, camera, voice):
                 response = brain.think(user_input)
             print(f"Ivar> {response}")
             update_transcript("ivar", response)
-            update_transcript("status", "Speaking...")
+            update_transcript("status", f"Ivar: {response}")
             voice.speak(response)
 
         print()
