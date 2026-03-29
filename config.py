@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 MODEL = os.getenv("MODEL", "claude-haiku-4-5-20251001")
 
@@ -21,9 +20,8 @@ STREAM_PORT = int(os.getenv("STREAM_PORT", "8080"))
 MAX_HISTORY_TURNS = 10
 
 VOICE_MODE = os.getenv("VOICE_MODE", "true").lower() == "true"
-TTS_MODEL = os.getenv("TTS_MODEL", "tts-1")
-TTS_VOICE = os.getenv("TTS_VOICE", "alloy")
-STT_MODEL = os.getenv("STT_MODEL", "whisper-1")
+TTS_VOICE = os.getenv("TTS_VOICE", "en-US-Neural2-D")
+TTS_LANGUAGE = os.getenv("TTS_LANGUAGE", "en-US")
 SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "500"))
 SILENCE_DURATION = float(os.getenv("SILENCE_DURATION", "1.5"))
 SAMPLE_RATE = 16000

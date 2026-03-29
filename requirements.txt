@@ -3,5 +3,6 @@ picamera2>=0.3.12
 numpy
 Pillow
 python-dotenv
-openai>=1.0.0
+google-cloud-speech>=2.0.0
+google-cloud-texttospeech>=2.0.0
 sounddevice>=0.4.6
