@@ -19,7 +19,10 @@ def main():
     print_banner(has_camera=camera is not None)
 
     if camera:
-        print("  Camera: ready")
+        if camera.detection_enabled:
+            print("  Camera: ready (object detection on)")
+        else:
+            print("  Camera: ready")
     else:
         print("  Camera: off")
 
@@ -71,6 +74,26 @@ def main():
         camera.close()
 
 
+def _build_prompt(user_input, detections):
+    """Add object detection results to the user prompt."""
+    if not detections:
+        return user_input
+    obj_list = ", ".join(
+        f"{d['label']} ({d['confidence']:.0%})" for d in detections
+    )
+    return f"{user_input}\n\n[Objects detected in scene: {obj_list}]"
+
+
+def _capture_with_detections(camera):
+    """Capture frame with detections if available, else plain capture."""
+    if camera.detection_enabled:
+        image_b64, detections = camera.capture_frame_base64_with_detections()
+        if detections:
+            print(f"  [Detected: {', '.join(d['label'] for d in detections)}]")
+        return image_b64, detections
+    return camera.capture_frame_base64(), []
+
+
 def _voice_loop(brain, camera, voice):
     """Voice conversation loop: listen -> think -> speak."""
     print("Voice mode active. Speak to Ivar! (Ctrl+C to quit)\n")
@@ -99,8 +122,9 @@ def _voice_loop(brain, camera, voice):
 
             else:
                 if camera:
-                    image_b64 = camera.capture_frame_base64()
-                    response = brain.see_and_think(image_b64, user_input)
+                    image_b64, detections = _capture_with_detections(camera)
+                    prompt = _build_prompt(user_input, detections)
+                    response = brain.see_and_think(image_b64, prompt)
                 else:
                     response = brain.think(user_input)
                 print(f"Ivar> {response}")
@@ -141,8 +165,10 @@ def _text_loop(brain, camera):
                 if not camera:
                     print("Ivar> I can't take photos without a camera.")
                     continue
-                frame = camera.capture_frame()
+                frame, detections = camera.capture_frame_with_detections()
                 path = save_frame(frame)
+                if detections:
+                    print(f"  [Detected: {', '.join(d['label'] for d in detections)}]")
                 print(f"Ivar> Photo saved to {path}")
 
             elif command == "look":
@@ -150,17 +176,17 @@ def _text_loop(brain, camera):
                     print("Ivar> I can't see without a camera.")
                     continue
                 print("[Capturing frame...]")
-                image_b64 = camera.capture_frame_base64()
-                response = brain.see_and_think(
-                    image_b64, "Describe what you see."
-                )
+                image_b64, detections = _capture_with_detections(camera)
+                prompt = _build_prompt("Describe what you see.", detections)
+                response = brain.see_and_think(image_b64, prompt)
                 print(f"Ivar> {response}")
 
             else:
                 if camera:
                     print("[Capturing frame...]")
-                    image_b64 = camera.capture_frame_base64()
-                    response = brain.see_and_think(image_b64, user_input)
+                    image_b64, detections = _capture_with_detections(camera)
+                    prompt = _build_prompt(user_input, detections)
+                    response = brain.see_and_think(image_b64, prompt)
                 else:
                     response = brain.think(user_input)
                 print(f"Ivar> {response}")
