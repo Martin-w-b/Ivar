@@ -2,7 +2,68 @@
 
 This guide covers connecting to your Raspberry Pi from a Mac. The workflow is very similar to Windows, with a few differences noted below.
 
-## 1. SSH Config (One-Time Setup)
+## 1. Connecting on a New Network
+
+If the Pi is not yet on your current Wi-Fi network, you can connect via a direct ethernet cable and configure Wi-Fi from there.
+
+### Direct Ethernet Connection
+
+1. Plug an ethernet cable directly between your Mac and the Pi (you may need a USB-C to Ethernet adapter)
+2. Wait a moment, then check if the Pi is reachable:
+   ```bash
+   ping ivar.local
+   ```
+   macOS has built-in mDNS support, so this should resolve immediately.
+
+   > **Note:** Use whatever hostname you configured during flashing (e.g. `ivar.local`), not the default `raspberrypi.local`.
+
+3. SSH in:
+   ```bash
+   ssh <username>@ivar.local
+   ```
+
+Both devices will get link-local addresses (`169.254.x.x`) automatically — no router or DHCP needed.
+
+### Configure Wi-Fi from the Pi
+
+Once connected via ethernet and SSH, set up Wi-Fi so the Pi connects wirelessly on future boots.
+
+**Simple WPA/WPA2 network:**
+
+```bash
+sudo nmcli dev wifi list
+sudo nmcli dev wifi connect "<SSID>" password "<password>"
+```
+
+**WPA2-Enterprise network** (corporate networks with username/password login):
+
+```bash
+sudo nmcli connection add type wifi con-name "<connection-name>" ssid "<SSID>" wifi-sec.key-mgmt wpa-eap 802-1x.eap peap 802-1x.phase2-auth mschapv2 802-1x.identity "<your-username>" 802-1x.password '<your-password>'
+sudo nmcli connection up "<connection-name>"
+```
+
+> **Important:** When the Pi switches to Wi-Fi, your ethernet SSH session will drop. This is expected — just reconnect: `ssh <username>@ivar.local`
+
+The Wi-Fi connection is saved and the Pi will reconnect automatically on every boot.
+
+### Reflashing the SD Card
+
+If you can't connect to the Pi at all (forgot credentials, corrupted OS), reflash with Raspberry Pi Imager:
+
+1. In the OS Customisation settings, set your username and hostname
+2. Enable SSH — choose **"Allow public-key authentication only"** and paste your public key:
+   ```bash
+   # View your public key:
+   cat ~/.ssh/id_ed25519.pub
+   ```
+   If you don't have a key yet, generate one: `ssh-keygen -t ed25519`
+3. After flashing and booting, clear the old host key:
+   ```bash
+   ssh-keygen -R ivar.local
+   ```
+4. Connect: `ssh <username>@ivar.local`
+
+## 2. SSH Config (One-Time Setup)
 
 Open Terminal and edit your SSH config:
 
@@ -27,7 +88,7 @@ mkdir -p ~/.ssh
 chmod 700 ~/.ssh
 ```
 
-## 2. Terminal SSH
+## 3. Terminal SSH
 
 macOS has SSH built in. Open Terminal (or iTerm2) and run:
 
@@ -55,7 +116,7 @@ After this, `ssh ivar` connects without a password.
 
 > **Note:** `ssh-copy-id` is not installed by default on older macOS versions. Install it with Homebrew: `brew install ssh-copy-id`
 
-## 3. VS Code Remote SSH
+## 4. VS Code Remote SSH
 
 ### Install VS Code
 
@@ -98,7 +159,7 @@ brew install --cask visual-studio-code
 
 Photos saved by Ivar's `snap` command go to the `captures/` folder. Click any `.jpg` in VS Code's file explorer to view it.
 
-## 4. Running Ivar
+## 5. Running Ivar
 
 From any terminal connected to the Pi:
 
@@ -108,7 +169,7 @@ source venv/bin/activate
 python main.py
 ```
 
-## 5. Development Workflow
+## 6. Development Workflow
 
 ### Option A: Edit on Pi via VS Code Remote SSH (Recommended)
 
@@ -139,6 +200,71 @@ cd ~/ivar && git pull && python main.py
 
 > **Note:** macOS has built-in mDNS support, so `ivar.local` should resolve immediately without any extra software. On Windows, this depends on Bonjour being installed (it comes with iTunes or can be installed separately).
 
+## 7. Bluetooth Speaker/Mic Setup
+
+To enable voice mode, pair a Bluetooth speaker/mic with the Pi.
+
+### Install Bluetooth Packages
+
+```bash
+sudo apt install -y bluez pulseaudio-module-bluetooth
+```
+
+### Pair Your Device
+
+Put your Bluetooth speaker/mic into pairing mode, then on the Pi (via SSH):
+
+```bash
+bluetoothctl
+```
+
+Inside the `bluetoothctl` prompt:
+
+```
+power on
+agent on
+default-agent
+scan on
+```
+
+Wait for your device to appear, note its MAC address (e.g. `AA:BB:CC:DD:EE:FF`), then:
+
+```
+pair AA:BB:CC:DD:EE:FF
+trust AA:BB:CC:DD:EE:FF
+connect AA:BB:CC:DD:EE:FF
+quit
+```
+
+### Verify Audio
+
+```bash
+# Check that the Bluetooth speaker and mic are recognized
+pactl list sinks short     # should show a bluetooth sink
+pactl list sources short   # should show a bluetooth source
+
+# Set as default
+pactl set-default-sink <bluetooth-sink-name>
+pactl set-default-source <bluetooth-source-name>
+
+# Test: record 3 seconds, then play back
+arecord -d 3 test.wav && aplay test.wav
+```
+
+The device will auto-reconnect on future boots (since we used `trust`).
+
+### Run Ivar in Voice Mode
+
+With the Bluetooth device connected and `OPENAI_API_KEY` set in `.env`:
+
+```bash
+cd ~/ivar
+source venv/bin/activate
+python main.py
+```
+
+Ivar will detect the audio device and start in voice mode automatically. To disable voice mode, set `VOICE_MODE=false` in `.env`.
+
 ## Troubleshooting
 
 ### Can't find the Pi
@@ -160,9 +286,16 @@ ssh-keygen -R ivar.local
 
 Then try connecting again.
 
+### Ethernet adapter not detecting the Pi
+
+- Make sure the Pi is powered on and the cable is plugged in on both ends
+- Try a different cable or USB-C adapter
+- Check System Settings → Network — the ethernet interface should show "Connected" or "Self-Assigned IP"
+
 ### "Permission denied" on SSH
 
 - Double-check your username and password
+- If using public key auth, verify your key was added during flashing
 - If you forgot the password, re-flash the SD card
 
 ### VS Code can't connect

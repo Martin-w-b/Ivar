@@ -8,7 +8,74 @@ This guide covers how to connect to your Raspberry Pi from your PC for developme
 - SSH is enabled on the Pi (configured during SD card flashing)
 - You know your Pi's username, password, and hostname
 
-## 1. SSH Config (One-Time Setup)
+## 1. Connecting on a New Network
+
+If the Pi is not yet on your current Wi-Fi network, you can connect via a direct ethernet cable and configure Wi-Fi from there.
+
+### Direct Ethernet Connection
+
+1. Plug an ethernet cable directly between your PC and the Pi
+2. Wait a moment, then check the adapter status in PowerShell:
+   ```powershell
+   Get-NetAdapter
+   ```
+   The Ethernet adapter should show **Status: Up**. If it shows "Disconnected", try a different cable or check that the Pi is powered on.
+
+3. Try to reach the Pi:
+   ```bash
+   ping ivar.local
+   ```
+   > **Note:** `ping raspberrypi.local` won't work if you set a custom hostname during flashing. Use whatever hostname you configured (e.g. `ivar.local`).
+
+4. SSH in:
+   ```bash
+   ssh <username>@ivar.local
+   ```
+
+Both devices will get link-local addresses (`169.254.x.x`) automatically — no router or DHCP needed.
+
+> **Note:** On corporate networks, IT may disable the ethernet port via group policy. If `Get-NetAdapter` shows the adapter as "Disabled" or "Not Present", check with your IT department.
+
+### Configure Wi-Fi from the Pi
+
+Once connected via ethernet and SSH, set up Wi-Fi so the Pi connects wirelessly on future boots.
+
+**Simple WPA/WPA2 network:**
+
+```bash
+sudo nmcli dev wifi list
+sudo nmcli dev wifi connect "<SSID>" password "<password>"
+```
+
+**WPA2-Enterprise network** (corporate networks with username/password login):
+
+```bash
+sudo nmcli connection add type wifi con-name "<connection-name>" ssid "<SSID>" wifi-sec.key-mgmt wpa-eap 802-1x.eap peap 802-1x.phase2-auth mschapv2 802-1x.identity "<your-username>" 802-1x.password '<your-password>'
+sudo nmcli connection up "<connection-name>"
+```
+
+> **Important:** When the Pi switches to Wi-Fi, your ethernet SSH session will drop. This is expected — just reconnect: `ssh <username>@ivar.local`
+
+The Wi-Fi connection is saved and the Pi will reconnect automatically on every boot.
+
+### Reflashing the SD Card
+
+If you can't connect to the Pi at all (forgot credentials, corrupted OS), reflash with Raspberry Pi Imager:
+
+1. In the OS Customisation settings, set your username and hostname
+2. Enable SSH — choose **"Allow public-key authentication only"** and paste your public key:
+   ```bash
+   # View your public key on your PC:
+   cat ~/.ssh/id_ed25519.pub
+   ```
+   If you don't have a key yet, generate one: `ssh-keygen -t ed25519`
+3. After flashing and booting, clear the old host key:
+   ```bash
+   ssh-keygen -R ivar.local
+   ```
+4. Connect: `ssh <username>@ivar.local`
+
+## 2. SSH Config (One-Time Setup)
 
 Create or edit `~/.ssh/config` on your PC (Windows: `C:\Users\<you>\.ssh\config`):
 
@@ -20,7 +87,7 @@ Host ivar
 
 This lets you type `ssh ivar` instead of the full address every time.
 
-## 2. Terminal SSH
+## 3. Terminal SSH
 
 The simplest way to connect:
 
@@ -50,7 +117,7 @@ ssh-copy-id ivar
 
 After this, `ssh ivar` will connect without asking for a password.
 
-## 3. VS Code Remote SSH
+## 4. VS Code Remote SSH
 
 This is the recommended way to develop. You get full code editing, file browsing, and a terminal — all on the Pi, but from your PC's VS Code.
 
@@ -86,7 +153,7 @@ This is the recommended way to develop. You get full code editing, file browsing
 
 When Ivar saves a photo (via the `snap` command), it goes to the `captures/` folder. You can click on any `.jpg` file in VS Code's file explorer to view it directly.
 
-## 4. Running Ivar
+## 5. Running Ivar
 
 From any terminal connected to the Pi (SSH or VS Code terminal):
 
@@ -96,7 +163,7 @@ source venv/bin/activate
 python main.py
 ```
 
-## 5. Development Workflow
+## 6. Development Workflow
 
 ### Option A: Edit on Pi via VS Code Remote SSH (Recommended)
 
@@ -115,6 +182,71 @@ python main.py
    ```bash
    cd ~/ivar && git pull && python main.py
    ```
+
+## 7. Bluetooth Speaker/Mic Setup
+
+To enable voice mode, pair a Bluetooth speaker/mic with the Pi.
+
+### Install Bluetooth Packages
+
+```bash
+sudo apt install -y bluez pulseaudio-module-bluetooth
+```
+
+### Pair Your Device
+
+Put your Bluetooth speaker/mic into pairing mode, then on the Pi:
+
+```bash
+bluetoothctl
+```
+
+Inside the `bluetoothctl` prompt:
+
+```
+power on
+agent on
+default-agent
+scan on
+```
+
+Wait for your device to appear, note its MAC address (e.g. `AA:BB:CC:DD:EE:FF`), then:
+
+```
+pair AA:BB:CC:DD:EE:FF
+trust AA:BB:CC:DD:EE:FF
+connect AA:BB:CC:DD:EE:FF
+quit
+```
+
+### Verify Audio
+
+```bash
+# Check that the Bluetooth speaker and mic are recognized
+pactl list sinks short     # should show a bluetooth sink
+pactl list sources short   # should show a bluetooth source
+
+# Set as default
+pactl set-default-sink <bluetooth-sink-name>
+pactl set-default-source <bluetooth-source-name>
+
+# Test: record 3 seconds, then play back
+arecord -d 3 test.wav && aplay test.wav
+```
+
+The device will auto-reconnect on future boots (since we used `trust`).
+
+### Run Ivar in Voice Mode
+
+With the Bluetooth device connected and `OPENAI_API_KEY` set in `.env`:
+
+```bash
+cd ~/ivar
+source venv/bin/activate
+python main.py
+```
+
+Ivar will detect the audio device and start in voice mode automatically. To disable voice mode, set `VOICE_MODE=false` in `.env`.
 
 ## Troubleshooting
 
@@ -139,10 +271,18 @@ ssh-keygen -R ivar.local
 
 Then try connecting again.
 
+### Ethernet adapter shows "Media disconnected"
+
+- Make sure the Pi is powered on and the cable is plugged in on both ends
+- Try a different ethernet cable
+- Check Device Manager → Network adapters — the ethernet controller may be disabled
+- Corporate IT may have disabled the port via group policy
+
 ### "Permission denied" on SSH
 
 - Double-check your username and password
 - Make sure you're using the credentials set in Raspberry Pi Imager
+- If using public key auth, verify your key was added during flashing
 - If you forgot the password, re-flash the SD card
 
 ### VS Code can't connect

@@ -1,7 +1,7 @@
 from camera import IvarCamera, CAMERA_AVAILABLE
 from brain import IvarBrain
 from stream import start_stream_server
-from config import STREAM_PORT
+from config import STREAM_PORT, VOICE_MODE
 from utils import setup_logging, save_frame, print_banner
 
 
@@ -36,9 +36,78 @@ def main():
         except Exception as e:
             print(f"  Stream: failed ({e})")
 
+    # Initialize voice
+    voice = None
+    if VOICE_MODE:
+        try:
+            from voice import IvarVoice, VOICE_AVAILABLE
+            if VOICE_AVAILABLE:
+                voice = IvarVoice()
+                print("  Voice: ready (say 'quit' to exit)")
+            else:
+                print("  Voice: no audio device found, falling back to text")
+        except RuntimeError as e:
+            print(f"  Voice: disabled ({e})")
+        except ImportError as e:
+            print(f"  Voice: missing dependencies ({e})")
+
     print(f"  Brain:  {brain.model}")
     print()
 
+    if voice:
+        _voice_loop(brain, camera, voice)
+    else:
+        _text_loop(brain, camera)
+
+    if stream_server:
+        stream_server.shutdown()
+    if camera:
+        camera.close()
+
+
+def _voice_loop(brain, camera, voice):
+    """Voice conversation loop: listen -> think -> speak."""
+    print("Voice mode active. Speak to Ivar! (Ctrl+C to quit)\n")
+    try:
+        while True:
+            print("[Listening...]")
+            user_input = voice.listen()
+
+            if not user_input:
+                print("[No speech detected, try again]")
+                continue
+
+            print(f"You> {user_input}")
+
+            command = user_input.lower().strip().rstrip(".")
+
+            if command in ("quit", "exit", "stop"):
+                print("Goodbye!")
+                voice.speak("Goodbye!")
+                break
+
+            elif command == "reset":
+                brain.reset_conversation()
+                print("Ivar> Conversation cleared. Fresh start!")
+                voice.speak("Conversation cleared. Fresh start!")
+
+            else:
+                if camera:
+                    image_b64 = camera.capture_frame_base64()
+                    response = brain.see_and_think(image_b64, user_input)
+                else:
+                    response = brain.think(user_input)
+                print(f"Ivar> {response}")
+                voice.speak(response)
+
+            print()
+
+    except KeyboardInterrupt:
+        print("\nGoodbye!")
+
+
+def _text_loop(brain, camera):
+    """Original text REPL loop."""
     try:
         while True:
             try:
@@ -82,13 +151,11 @@ def main():
                 print(f"Ivar> {response}")
 
             else:
-                # Any other input: capture frame + ask question
                 if camera:
                     print("[Capturing frame...]")
                     image_b64 = camera.capture_frame_base64()
                     response = brain.see_and_think(image_b64, user_input)
                 else:
-                    # No camera — text-only conversation
                     response = brain.think(user_input)
                 print(f"Ivar> {response}")
 
@@ -96,11 +163,6 @@ def main():
 
     except KeyboardInterrupt:
         print("\nGoodbye!")
-    finally:
-        if stream_server:
-            stream_server.shutdown()
-        if camera:
-            camera.close()
 
 
 if __name__ == "__main__":

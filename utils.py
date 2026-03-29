@@ -38,6 +38,6 @@ def print_banner():
     print("  ║     help  - show this message         ║")
     print("  ║     quit  - exit                      ║")
     print("  ║                                       ║")
-    print("  ║   Or just type a question!            ║")
+    print("  ║   Or just type/say a question!        ║")
     print("  ╚══════════════════════════════════════╝")
     print()
