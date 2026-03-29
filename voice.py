@@ -59,22 +59,25 @@ class IvarVoice:
 
         logger.info("Listening...")
 
-        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
-                            dtype="int16", blocksize=chunk_samples) as stream:
-            while True:
-                data, _ = stream.read(chunk_samples)
-                audio_chunk = data[:, 0]  # mono
-                rms = np.sqrt(np.mean(audio_chunk.astype(np.float32) ** 2))
+        try:
+            with sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
+                                dtype="int16", blocksize=chunk_samples) as stream:
+                while True:
+                    data, _ = stream.read(chunk_samples)
+                    audio_chunk = data[:, 0]  # mono
+                    rms = np.sqrt(np.mean(audio_chunk.astype(np.float32) ** 2))
 
-                if rms > SILENCE_THRESHOLD:
-                    recording = True
-                    silent_count = 0
-                    frames.append(audio_chunk)
-                elif recording:
-                    frames.append(audio_chunk)
-                    silent_count += 1
-                    if silent_count >= silence_chunks:
-                        break
+                    if rms > SILENCE_THRESHOLD:
+                        recording = True
+                        silent_count = 0
+                        frames.append(audio_chunk)
+                    elif recording:
+                        frames.append(audio_chunk)
+                        silent_count += 1
+                        if silent_count >= silence_chunks:
+                            break
+        except KeyboardInterrupt:
+            raise
 
         if not frames:
             return b""

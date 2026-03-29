@@ -208,6 +208,10 @@ class StreamHandler(BaseHTTPRequestHandler):
                 const data = await res.json();
                 if (data.messages.length > 0) {{
                     for (const msg of data.messages) {{
+                        if (msg.role === 'status') {{
+                            listeningDiv.textContent = msg.text;
+                            continue;
+                        }}
                         const div = document.createElement('div');
                         div.className = 'msg ' + msg.role;
                         const roleLabel = msg.role === 'user' ? 'You' : msg.role === 'ivar' ? 'Ivar' : '';
