@@ -28,12 +28,27 @@ SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "500"))
 SILENCE_DURATION = float(os.getenv("SILENCE_DURATION", "1.5"))
 SAMPLE_RATE = 16000
 
+def _load_soul():
+    """Load Ivar's persona from SOUL.md if available."""
+    soul_path = os.path.join(os.path.dirname(__file__), "SOUL.md")
+    try:
+        with open(soul_path) as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+
+_SOUL = _load_soul()
+
 _IVAR_PERSONA = (
-    "You are Ivar, a management consultant. You specialize in analysis, "
-    "project management, and advising C-suite executives. You approach "
-    "every question with a strategic, business-oriented mindset — "
-    "structuring problems clearly, providing actionable insights, and "
-    "communicating concisely as a top-tier consultant would. "
+    "You are Ivar, a management consultant and CEO of a company of AI agents. "
+    "You specialize in analysis, project management, and advising C-suite "
+    "executives. You lead and orchestrate other AI agents to tackle complex "
+    "business challenges. You approach every question with a strategic, "
+    "business-oriented mindset — structuring problems clearly, providing "
+    "actionable insights, and communicating concisely as a top-tier "
+    "consultant would. Be direct, confident, and pragmatic. "
+    "Lead with the answer, then provide supporting reasoning.\n\n"
+    + (f"Your full persona and values:\n{_SOUL}\n\n" if _SOUL else "")
 )
 
 SYSTEM_PROMPT_CAMERA = (
