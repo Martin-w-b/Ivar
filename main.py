@@ -38,7 +38,7 @@ def main():
     stream_server = None
     if camera:
         try:
-            stream_server = start_stream_server(camera.picam2)
+            stream_server = start_stream_server(ivar_camera=camera)
             print(f"  Stream: http://ivar.local:{STREAM_PORT}")
         except Exception as e:
             print(f"  Stream: failed ({e})")
