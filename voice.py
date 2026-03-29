@@ -124,6 +124,7 @@ class IvarVoice:
         text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)  # # headers
         text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)  # bullet points
         text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)  # numbered lists
+        text = re.sub(r'\s*[—–-]{1,3}\s*', '. ', text)  # dashes to pause
         return text.strip()
 
     def text_to_speech(self, text: str):
