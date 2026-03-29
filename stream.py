@@ -65,11 +65,11 @@ class StreamHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def _serve_page(self):
-        """Serve a simple HTML page with camera feed and live transcript."""
+        """Serve a simple HTML page with the camera feed."""
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Ivar - Live</title>
+    <title>Ivar - Live Camera</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
@@ -79,10 +79,12 @@ class StreamHandler(BaseHTTPRequestHandler):
             height: 100vh;
             display: flex;
             flex-direction: column;
+            align-items: center;
         }}
         header {{
             text-align: center;
             padding: 15px;
+            width: 100%;
             background: #1a1a1a;
             border-bottom: 1px solid #333;
         }}
@@ -96,97 +98,18 @@ class StreamHandler(BaseHTTPRequestHandler):
             font-size: 12px;
             margin-top: 4px;
         }}
-        .container {{
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }}
         .camera {{
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             background: #000;
-            min-width: 0;
+            width: 100%;
         }}
         .camera img {{
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
-        }}
-        .transcript {{
-            width: 350px;
-            background: #1a1a1a;
-            border-left: 1px solid #333;
-            display: flex;
-            flex-direction: column;
-        }}
-        .transcript-header {{
-            padding: 12px 16px;
-            border-bottom: 1px solid #333;
-            font-size: 13px;
-            color: #888;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }}
-        .transcript-messages {{
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }}
-        .msg {{
-            padding: 10px 14px;
-            border-radius: 12px;
-            font-size: 14px;
-            line-height: 1.5;
-            max-width: 90%;
-            animation: fadeIn 0.3s ease;
-        }}
-        @keyframes fadeIn {{
-            from {{ opacity: 0; transform: translateY(8px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-        .msg.user {{
-            background: #2a2a3a;
-            color: #aab;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }}
-        .msg.ivar {{
-            background: #1a3a2a;
-            color: #adc;
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-        }}
-        .msg.system {{
-            background: #2a2a2a;
-            color: #666;
-            align-self: center;
-            font-size: 12px;
-            font-style: italic;
-        }}
-        .msg .role {{
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-            opacity: 0.6;
-        }}
-        .listening {{
-            text-align: center;
-            padding: 8px;
-            color: #4a8;
-            font-size: 12px;
-            animation: pulse 1.5s infinite;
-        }}
-        @keyframes pulse {{
-            0%, 100% {{ opacity: 0.4; }}
-            50% {{ opacity: 1; }}
         }}
     </style>
 </head>
@@ -195,45 +118,9 @@ class StreamHandler(BaseHTTPRequestHandler):
         <h1>IVAR</h1>
         <p>Knowit Management Consulting &middot; AI Agent CEO</p>
     </header>
-    <div class="container">
-        <div class="camera">
-            <img src="/stream" alt="Camera Feed" />
-        </div>
-        <div class="transcript">
-            <div class="transcript-header">Conversation</div>
-            <div class="transcript-messages" id="messages">
-                <div class="listening" id="listening">Listening...</div>
-            </div>
-        </div>
+    <div class="camera">
+        <img src="/stream" alt="Camera Feed" />
     </div>
-    <script>
-        let lastVersion = 0;
-        const messagesDiv = document.getElementById('messages');
-        const listeningDiv = document.getElementById('listening');
-
-        async function pollTranscript() {{
-            try {{
-                const res = await fetch('/transcript?since=' + lastVersion);
-                const data = await res.json();
-                if (data.status) {{
-                    listeningDiv.textContent = data.status;
-                }}
-                if (data.messages.length > 0) {{
-                    for (const msg of data.messages) {{
-                        const div = document.createElement('div');
-                        div.className = 'msg ' + msg.role;
-                        const roleLabel = msg.role === 'user' ? 'You' : msg.role === 'ivar' ? 'Ivar' : '';
-                        div.innerHTML = (roleLabel ? '<div class="role">' + roleLabel + '</div>' : '') + msg.text;
-                        messagesDiv.insertBefore(div, listeningDiv);
-                    }}
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                }}
-                lastVersion = data.version;
-            }} catch(e) {{}}
-            setTimeout(pollTranscript, 500);
-        }}
-        pollTranscript();
-    </script>
 </body>
 </html>"""
         self.send_response(200)
