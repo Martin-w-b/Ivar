@@ -2,7 +2,7 @@ import logging
 
 import anthropic
 
-from config import ANTHROPIC_API_KEY, MODEL, MAX_TOKENS, SYSTEM_PROMPT, MAX_HISTORY_TURNS
+from config import ANTHROPIC_API_KEY, MODEL, MAX_TOKENS, SYSTEM_PROMPT_CAMERA, MAX_HISTORY_TURNS
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class IvarBrain:
     """Claude API integration for Ivar's vision and conversation."""
 
-    def __init__(self):
+    def __init__(self, system_prompt=None):
         if not ANTHROPIC_API_KEY:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY not set. Copy .env.example to .env "
@@ -20,7 +20,7 @@ class IvarBrain:
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         self.model = MODEL
         self.max_tokens = MAX_TOKENS
-        self.system_prompt = SYSTEM_PROMPT
+        self.system_prompt = system_prompt or SYSTEM_PROMPT_CAMERA
         self.conversation_history = []
         logger.info("Brain initialized with model %s", self.model)
 

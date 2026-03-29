@@ -24,16 +24,20 @@ def save_frame(image, directory=None) -> str:
     return path
 
 
-def print_banner():
+def print_banner(has_camera=True):
     """Print the Ivar welcome banner."""
     print()
     print("  ╔══════════════════════════════════════╗")
     print("  ║            === IVAR ===               ║")
-    print("  ║   Your AI-powered vision robot        ║")
+    if has_camera:
+        print("  ║   Your AI-powered vision robot        ║")
+    else:
+        print("  ║   Your AI-powered assistant            ║")
     print("  ║                                       ║")
     print("  ║   Commands:                           ║")
-    print("  ║     look  - describe what I see        ║")
-    print("  ║     snap  - save a photo              ║")
+    if has_camera:
+        print("  ║     look  - describe what I see        ║")
+        print("  ║     snap  - save a photo              ║")
     print("  ║     reset - clear conversation        ║")
     print("  ║     help  - show this message         ║")
     print("  ║     quit  - exit                      ║")

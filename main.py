@@ -1,31 +1,35 @@
 from camera import IvarCamera, CAMERA_AVAILABLE
 from brain import IvarBrain
 from stream import start_stream_server
-from config import STREAM_PORT, VOICE_MODE
+from config import STREAM_PORT, VOICE_MODE, SYSTEM_PROMPT_CAMERA, SYSTEM_PROMPT_NO_CAMERA
 from utils import setup_logging, save_frame, print_banner
 
 
 def main():
     setup_logging()
-    print_banner()
-
-    # Initialize brain (Claude API)
-    try:
-        brain = IvarBrain()
-    except RuntimeError as e:
-        print(f"Error: {e}")
-        return
 
     # Initialize camera
     camera = None
     if CAMERA_AVAILABLE:
         try:
             camera = IvarCamera()
-            print("  Camera: ready")
-        except Exception as e:
-            print(f"  Camera: unavailable ({e})")
+        except Exception:
+            pass
+
+    print_banner(has_camera=camera is not None)
+
+    if camera:
+        print("  Camera: ready")
     else:
-        print("  Camera: not available (not on Raspberry Pi?)")
+        print("  Camera: off")
+
+    # Initialize brain (Claude API) with appropriate prompt
+    system_prompt = SYSTEM_PROMPT_CAMERA if camera else SYSTEM_PROMPT_NO_CAMERA
+    try:
+        brain = IvarBrain(system_prompt=system_prompt)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        return
 
     # Start live stream server
     stream_server = None
@@ -125,7 +129,7 @@ def _text_loop(brain, camera):
                 break
 
             elif command == "help":
-                print_banner()
+                print_banner(has_camera=camera is not None)
 
             elif command == "reset":
                 brain.reset_conversation()
