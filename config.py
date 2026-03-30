@@ -23,7 +23,7 @@ VOICE_MODE = os.getenv("VOICE_MODE", "true").lower() == "true"
 TTS_VOICE = os.getenv("TTS_VOICE", "en-US-Neural2-D")
 TTS_LANGUAGE = os.getenv("TTS_LANGUAGE", "en-US")
 SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "500"))
-SILENCE_DURATION = float(os.getenv("SILENCE_DURATION", "1.5"))
+SILENCE_DURATION = float(os.getenv("SILENCE_DURATION", "0.8"))
 SAMPLE_RATE = 16000
 
 def _load_soul():

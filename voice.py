@@ -2,6 +2,8 @@ import io
 import re
 import wave
 import logging
+import threading
+import queue
 
 import numpy as np
 import sounddevice as sd
@@ -29,10 +31,13 @@ class IvarVoice:
     def __init__(self):
         self.stt_client = speech.SpeechClient()
         self.tts_client = texttospeech.TextToSpeechClient()
-        self.stt_config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=SAMPLE_RATE,
-            language_code=TTS_LANGUAGE,
+        self.streaming_config = speech.StreamingRecognitionConfig(
+            config=speech.RecognitionConfig(
+                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+                sample_rate_hertz=SAMPLE_RATE,
+                language_code=TTS_LANGUAGE,
+            ),
+            interim_results=False,
         )
         self.voice_params = texttospeech.VoiceSelectionParams(
             language_code=TTS_LANGUAGE,
@@ -44,16 +49,50 @@ class IvarVoice:
         )
         logger.info("Voice initialized (Google Cloud, voice: %s)", TTS_VOICE)
 
-    def record_audio(self) -> bytes:
-        """Record from the microphone until silence is detected.
+    def listen(self) -> str:
+        """Record audio with streaming STT — transcribes while recording.
 
-        Returns WAV file bytes.
+        Streams audio chunks to Google as the user speaks and returns the
+        final transcript once silence is detected.
         """
         chunk_duration = 0.1  # 100ms chunks
         chunk_samples = int(SAMPLE_RATE * chunk_duration)
         silence_chunks = int(SILENCE_DURATION / chunk_duration)
 
-        frames = []
+        audio_queue = queue.Queue()
+        stop_event = threading.Event()
+
+        def request_generator():
+            """Yield StreamingRecognizeRequests from the audio queue."""
+            while not stop_event.is_set():
+                try:
+                    data = audio_queue.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+                if data is None:
+                    break
+                yield speech.StreamingRecognizeRequest(audio_content=data)
+
+        # Start streaming recognition in a background thread
+        transcript_result = [None]
+
+        def run_recognition():
+            try:
+                responses = self.stt_client.streaming_recognize(
+                    config=self.streaming_config,
+                    requests=request_generator(),
+                )
+                for response in responses:
+                    for result in response.results:
+                        if result.is_final:
+                            transcript_result[0] = result.alternatives[0].transcript.strip()
+            except Exception as e:
+                logger.error("Streaming STT error: %s", e)
+
+        recognition_thread = threading.Thread(target=run_recognition, daemon=True)
+        recognition_thread.start()
+
+        # Record audio, feeding chunks to STT in real time
         silent_count = 0
         recording = False
 
@@ -70,47 +109,26 @@ class IvarVoice:
                     if rms > SILENCE_THRESHOLD:
                         recording = True
                         silent_count = 0
-                        frames.append(audio_chunk)
+                        audio_queue.put(audio_chunk.tobytes())
                     elif recording:
-                        frames.append(audio_chunk)
+                        audio_queue.put(audio_chunk.tobytes())
                         silent_count += 1
                         if silent_count >= silence_chunks:
                             break
         except KeyboardInterrupt:
             raise
+        finally:
+            # Signal the generator to stop and wait for recognition
+            audio_queue.put(None)
+            stop_event.set()
+            recognition_thread.join(timeout=5)
 
-        if not frames:
-            return b""
-
-        audio_data = np.concatenate(frames)
-
-        # Convert to WAV bytes
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16-bit
-            wf.setframerate(SAMPLE_RATE)
-            wf.writeframes(audio_data.tobytes())
-        return buf.getvalue()
-
-    def speech_to_text(self, audio_bytes: bytes) -> str:
-        """Send audio to Google Cloud Speech-to-Text and return transcribed text."""
-        if not audio_bytes:
+        if not recording:
             return ""
 
-        # Extract raw PCM from WAV
-        buf = io.BytesIO(audio_bytes)
-        with wave.open(buf, "rb") as wf:
-            raw_audio = wf.readframes(wf.getnframes())
-
-        audio = speech.RecognitionAudio(content=raw_audio)
-        response = self.stt_client.recognize(config=self.stt_config, audio=audio)
-
-        if not response.results:
-            return ""
-
-        text = response.results[0].alternatives[0].transcript.strip()
-        logger.info("STT result: %s", text)
+        text = transcript_result[0] or ""
+        if text:
+            logger.info("STT result: %s", text)
         return text
 
     @staticmethod
@@ -143,13 +161,6 @@ class IvarVoice:
         # Play the audio (LINEAR16 PCM at 24kHz)
         audio_data = np.frombuffer(response.audio_content, dtype=np.int16)
         sd.play(audio_data, samplerate=24000, blocking=True)
-
-    def listen(self) -> str:
-        """Record audio and transcribe it. Returns the transcribed text."""
-        audio = self.record_audio()
-        if not audio:
-            return ""
-        return self.speech_to_text(audio)
 
     def speak(self, text: str):
         """Speak the given text through the speaker."""

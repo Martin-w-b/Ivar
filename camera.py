@@ -83,6 +83,18 @@ class IvarCamera:
         """Capture a single frame and return as a PIL Image."""
         return self.picam2.capture_image("main")
 
+    def capture_frame_and_metadata(self):
+        """Capture a frame and its metadata together.
+
+        Returns (PIL Image, metadata dict) from the same capture request,
+        ensuring detection results correspond to the returned frame.
+        """
+        arrays = self.picam2.capture_arrays(["main"])
+        metadata = self.picam2.capture_metadata()
+        from PIL import Image
+        frame = Image.fromarray(arrays[0])
+        return frame, metadata
+
     def detect_objects(self, metadata=None):
         """Run object detection and return list of detected objects."""
         if not self.detection_enabled:
@@ -138,9 +150,14 @@ class IvarCamera:
         """Capture a frame, run detection, and annotate the image.
 
         Returns (annotated PIL Image, list of detections).
+        Uses synchronized frame+metadata to ensure boxes match the frame.
         """
-        frame = self.capture_frame()
-        detections = self.detect_objects()
+        if self.detection_enabled:
+            frame, metadata = self.capture_frame_and_metadata()
+            detections = self.detect_objects(metadata)
+        else:
+            frame = self.capture_frame()
+            detections = []
 
         if detections:
             draw = ImageDraw.Draw(frame)

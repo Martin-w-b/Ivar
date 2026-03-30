@@ -131,13 +131,20 @@ def _voice_loop(brain, camera, voice):
             if camera:
                 image_b64, detections = _capture_with_detections(camera)
                 prompt = _build_prompt(user_input, detections)
-                response = brain.see_and_think(image_b64, prompt)
+                sentences = brain.see_and_think_stream(image_b64, prompt)
             else:
-                response = brain.think(user_input)
-            print(f"Ivar> {response}")
+                sentences = brain.think_stream(user_input)
+
+            # Speak each sentence as it arrives from the stream
+            full_response = []
+            for sentence in sentences:
+                full_response.append(sentence)
+                print(f"Ivar> {sentence}")
+                voice.speak(sentence)
+
+            response = " ".join(full_response)
             update_transcript("ivar", response)
             update_status(f"Ivar: {response}")
-            voice.speak(response)
 
         print()
 
