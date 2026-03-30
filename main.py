@@ -1,7 +1,7 @@
 from camera import IvarCamera, CAMERA_AVAILABLE
 from brain import IvarBrain
 from stream import start_stream_server, update_transcript, update_status
-from config import STREAM_PORT, VOICE_MODE, SYSTEM_PROMPT_CAMERA, SYSTEM_PROMPT_NO_CAMERA
+from config import STREAM_PORT, VOICE_MODE, TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT_CAMERA, SYSTEM_PROMPT_NO_CAMERA
 from utils import setup_logging, save_frame, print_banner
 
 
@@ -43,6 +43,19 @@ def main():
         except Exception as e:
             print(f"  Stream: failed ({e})")
 
+    # Start Telegram bot in background (always on when token is set)
+    telegram = None
+    if TELEGRAM_BOT_TOKEN:
+        try:
+            from telegram_bot import IvarTelegramBot
+            telegram = IvarTelegramBot(
+                token=TELEGRAM_BOT_TOKEN, brain=brain, camera=camera,
+            )
+            telegram.start_background()
+            print("  Telegram: ready (@Ivar_KMC_bot)")
+        except Exception as e:
+            print(f"  Telegram: failed ({e})")
+
     # Initialize voice
     voice = None
     if VOICE_MODE:
@@ -65,9 +78,9 @@ def main():
 
     try:
         if voice:
-            _voice_loop(brain, camera, voice)
+            _voice_loop(brain, camera, voice, telegram)
         else:
-            _text_loop(brain, camera)
+            _text_loop(brain, camera, telegram)
     except KeyboardInterrupt:
         print("\nGoodbye!")
 
@@ -97,7 +110,16 @@ def _capture_with_detections(camera):
     return camera.capture_frame_base64(), []
 
 
-def _voice_loop(brain, camera, voice):
+def _send_telegram(telegram, text):
+    """Forward a message to Telegram if available."""
+    if telegram:
+        try:
+            telegram.send_message(text)
+        except Exception:
+            pass
+
+
+def _voice_loop(brain, camera, voice, telegram=None):
     """Voice conversation loop: listen -> think -> speak."""
     print("Voice mode active. Speak to Ivar! (Ctrl+C to restart)\n")
     while True:
@@ -112,6 +134,7 @@ def _voice_loop(brain, camera, voice):
         print(f"You> {user_input}")
         update_transcript("user", user_input)
         update_status(f"You: {user_input}")
+        _send_telegram(telegram, f"You (voice): {user_input}")
 
         command = user_input.lower().strip().rstrip(".")
 
@@ -145,11 +168,12 @@ def _voice_loop(brain, camera, voice):
             response = " ".join(full_response)
             update_transcript("ivar", response)
             update_status(f"Ivar: {response}")
+            _send_telegram(telegram, f"Ivar: {response}")
 
         print()
 
 
-def _text_loop(brain, camera):
+def _text_loop(brain, camera, telegram=None):
     """Original text REPL loop."""
     while True:
         try:
@@ -194,9 +218,11 @@ def _text_loop(brain, camera):
             response = brain.see_and_think(image_b64, prompt)
             print(f"Ivar> {response}")
             update_transcript("ivar", response)
+            _send_telegram(telegram, f"Ivar: {response}")
 
         else:
             update_transcript("user", user_input)
+            _send_telegram(telegram, f"You (text): {user_input}")
             if camera:
                 print("[Capturing frame...]")
                 image_b64, detections = _capture_with_detections(camera)
@@ -206,6 +232,7 @@ def _text_loop(brain, camera):
                 response = brain.think(user_input)
             print(f"Ivar> {response}")
             update_transcript("ivar", response)
+            _send_telegram(telegram, f"Ivar: {response}")
 
         print()
 

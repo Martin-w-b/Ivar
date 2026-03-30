@@ -19,6 +19,8 @@ STREAM_PORT = int(os.getenv("STREAM_PORT", "8080"))
 
 MAX_HISTORY_TURNS = 10
 
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 VOICE_MODE = os.getenv("VOICE_MODE", "true").lower() == "true"
 TTS_VOICE = os.getenv("TTS_VOICE", "en-US-Neural2-D")
 TTS_LANGUAGE = os.getenv("TTS_LANGUAGE", "en-US")
