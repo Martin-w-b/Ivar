@@ -52,8 +52,8 @@ class IvarVoice:
     def listen(self) -> str:
         """Record audio with streaming STT — transcribes while recording.
 
-        Streams audio chunks to Google as the user speaks and returns the
-        final transcript once silence is detected.
+        Waits for speech, then starts streaming audio to Google STT in
+        real-time. Returns the final transcript once silence is detected.
         """
         chunk_duration = 0.1  # 100ms chunks
         chunk_samples = int(SAMPLE_RATE * chunk_duration)
@@ -73,7 +73,6 @@ class IvarVoice:
                     break
                 yield speech.StreamingRecognizeRequest(audio_content=data)
 
-        # Start streaming recognition in a background thread
         transcript_result = [None]
 
         def run_recognition():
@@ -89,12 +88,9 @@ class IvarVoice:
             except Exception as e:
                 logger.error("Streaming STT error: %s", e)
 
-        recognition_thread = threading.Thread(target=run_recognition, daemon=True)
-        recognition_thread.start()
-
-        # Record audio, feeding chunks to STT in real time
         silent_count = 0
         recording = False
+        recognition_thread = None
 
         logger.info("Listening...")
 
@@ -107,7 +103,13 @@ class IvarVoice:
                     rms = np.sqrt(np.mean(audio_chunk.astype(np.float32) ** 2))
 
                     if rms > SILENCE_THRESHOLD:
-                        recording = True
+                        if not recording:
+                            # Speech just started — launch STT stream now
+                            recording = True
+                            recognition_thread = threading.Thread(
+                                target=run_recognition, daemon=True
+                            )
+                            recognition_thread.start()
                         silent_count = 0
                         audio_queue.put(audio_chunk.tobytes())
                     elif recording:
@@ -121,7 +123,8 @@ class IvarVoice:
             # Signal the generator to stop and wait for recognition
             audio_queue.put(None)
             stop_event.set()
-            recognition_thread.join(timeout=5)
+            if recognition_thread:
+                recognition_thread.join(timeout=5)
 
         if not recording:
             return ""
