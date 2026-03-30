@@ -89,10 +89,12 @@ class IvarCamera:
         Returns (PIL Image, metadata dict) from the same capture request,
         ensuring detection results correspond to the returned frame.
         """
-        arrays = self.picam2.capture_arrays(["main"])
-        metadata = self.picam2.capture_metadata()
-        from PIL import Image
-        frame = Image.fromarray(arrays[0])
+        request = self.picam2.capture_request()
+        try:
+            metadata = request.get_metadata()
+            frame = request.make_image("main")
+        finally:
+            request.release()
         return frame, metadata
 
     def detect_objects(self, metadata=None):
