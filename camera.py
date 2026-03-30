@@ -70,8 +70,8 @@ class IvarCamera:
             except Exception as e:
                 logger.warning("Could not load detection model: %s", e)
 
-        self.picam2 = Picamera2()
-        config = self.picam2.create_still_configuration(
+        self.picam2 = Picamera2(self.imx500.camera_num if self.imx500 else None)
+        config = self.picam2.create_preview_configuration(
             main={"size": CAMERA_RESOLUTION}
         )
         self.picam2.configure(config)
